@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'dart:async';
 import 'blank_screen.dart';
 import 'password_screen.dart';
 import 'menu_category_screen.dart';
 import 'topping_screen.dart';
 import 'order_history_screen.dart';
 import 'payment_screen.dart';
+import 'sales_dashboard_screen.dart';
 import '../services/supabase_service.dart';
 import '../models/product.dart';
 import '../models/category.dart';
@@ -29,7 +31,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // หน้าสั่งออเด้อ (หน้าเดิม)
     const _OrderScreen(),
     // หน้าบันทึกยอดขาย
-    const BlankScreen(title: 'บันทึกยอดขาย'),
+    const SalesDashboardScreen(),
     // หน้าเมนู-หมวดหมู่
     const MenuCategoryScreen(),
     // หน้าตระวัติการสั่งซื้อ
@@ -250,16 +252,55 @@ class _OrderScreenState extends State<_OrderScreen> {
   // เพิ่มตัวแปรสำหรับควบคุมการย่อ/ขยาย
   bool _isOrderBoxCollapsed = false;
 
+  // เพิ่มตัวแปรสำหรับเก็บเวลาปัจจุบัน
+  DateTime _currentTime = DateTime.now();
+  Timer? _timer;
+  // เพิ่มตัวแปรสำหรับชื่อผู้ใช้
+  final String _userName = "Captain";
+
+  // เพิ่มฟังก์ชันสำหรับรีเฟรชข้อมูลทั้งหมด
+  Future<void> _refreshApp() async {
+    try {
+      // รีเฟรชข้อมูลทั้งหมด
+      await _loadData();
+      // แสดงข้อความสำเร็จ
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('รีเฟร���ข้อมูลสำเร็จ'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาด: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _loadData();
     _setupRealtimeSubscription();
+    // เริ่ม timer สำหรับอัพเดทเวลา
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _currentTime = DateTime.now();
+      });
+    });
   }
 
   @override
   void dispose() {
-    // ยกเลิก subscription เมื่อออกจากหน้าจอ
+    _timer?.cancel();
     _supabaseService.supabase
       .channel('public:products')
       .unsubscribe();
@@ -412,7 +453,7 @@ class _OrderScreenState extends State<_OrderScreen> {
                           ),
                         ),
                       const SizedBox(width: 16),
-                      // ตัวเลือกด้านขวา
+                      // ตัวเลือกด้า���ขวา
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -456,141 +497,92 @@ class _OrderScreenState extends State<_OrderScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            Container(
-                              height: 180,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  children: _toppings.map((topping) {
-                                    final toppingCount = selectedToppings[topping] ?? 0;
-                                    return ListTile(
-                                      dense: true,
-                                      title: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  topping.name,
+                            Expanded(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    children: _toppings.map((topping) {
+                                      final toppingCount = selectedToppings[topping] ?? 0;
+                                      return ListTile(
+                                        dense: true,
+                                        title: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    topping.name,
+                                                    style: const TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    '฿${topping.price.toStringAsFixed(2)}',
+                                                    style: TextStyle(
+                                                      color: Colors.grey[600],
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (toppingCount > 0) ...[
+                                              IconButton(
+                                                icon: const Icon(Icons.remove),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    if (toppingCount > 1) {
+                                                      selectedToppings[topping] = toppingCount - 1;
+                                                    } else {
+                                                      selectedToppings.remove(topping);
+                                                    }
+                                                  });
+                                                },
+                                              ),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                                child: Text(
+                                                  toppingCount.toString(),
                                                   style: const TextStyle(
+                                                    fontSize: 16,
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
-                                                Text(
-                                                  '฿${topping.price.toStringAsFixed(2)}',
-                                                  style: TextStyle(
-                                                    color: Colors.grey[600],
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          if (toppingCount > 0) ...[
-                                            IconButton(
-                                              icon: const Icon(Icons.remove),
-                                              onPressed: () {
-                                                setState(() {
-                                                  if (toppingCount > 1) {
-                                                    selectedToppings[topping] = toppingCount - 1;
-                                                  } else {
-                                                    selectedToppings.remove(topping);
-                                                  }
-                                                });
-                                              },
-                                            ),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                                              child: Text(
-                                                toppingCount.toString(),
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
                                               ),
-                                            ),
-                                            IconButton(
-                                              icon: const Icon(Icons.add),
-                                              onPressed: () {
-                                                setState(() {
-                                                  selectedToppings[topping] = toppingCount + 1;
-                                                });
-                                              },
-                                            ),
-                                          ] else
-                                            ElevatedButton(
-                                              onPressed: () {
-                                                setState(() {
-                                                  selectedToppings[topping] = 1;
-                                                });
-                                              },
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFF323232),
-                                                foregroundColor: Colors.white,
-                                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                              IconButton(
+                                                icon: const Icon(Icons.add),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    selectedToppings[topping] = toppingCount + 1;
+                                                  });
+                                                },
                                               ),
-                                              child: const Text('เพิ่ม'),
-                                            ),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
+                                            ] else
+                                              ElevatedButton(
+                                                onPressed: () {
+                                                  setState(() {
+                                                    selectedToppings[topping] = 1;
+                                                  });
+                                                },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: const Color(0xFF323232),
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                                ),
+                                                child: const Text('เพิ่ม'),
+                                              ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            const Divider(height: 1, thickness: 1),
-                            const SizedBox(height: 16),
-                            // เลือกจำนวน
-                            Row(
-                              children: [
-                                const Text(
-                                  'จำนวน',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    border: Border.all(color: Colors.grey),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.remove),
-                                        onPressed: () {
-                                          if (quantity > 1) {
-                                            setState(() => quantity--);
-                                          }
-                                        },
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                                        child: Text(
-                                          quantity.toString(),
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.add),
-                                        onPressed: () {
-                                          setState(() => quantity++);
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
                             ),
                           ],
                         ),
@@ -607,21 +599,55 @@ class _OrderScreenState extends State<_OrderScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        'ราคารวม',
+                        'จำนวน',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Text(
-                        '฿${((product.price + selectedToppings.entries.fold<double>(0, (sum, entry) => sum + (entry.key.price * entry.value))) * quantity).toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
+                      const Spacer(),
+                      // เลือกจำนวน
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(4),
+                          color: Colors.white,
+                        ),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove),
+                              onPressed: () {
+                                if (quantity > 1) {
+                                  setState(() => quantity--);
+                                }
+                              },
+                              iconSize: 20,
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: Text(
+                                quantity.toString(),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add),
+                              onPressed: () {
+                                setState(() => quantity++);
+                              },
+                              iconSize: 20,
+                              padding: const EdgeInsets.all(4),
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -659,9 +685,22 @@ class _OrderScreenState extends State<_OrderScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: Text(
-                      editingItem != null ? 'บันทึกการแก้ไข' : 'เพิ่มลงตะกร้า',
-                      style: const TextStyle(fontSize: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          editingItem != null ? 'บัน��ึกการแก้ไข' : 'เพิ่มลงตะกร้า',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '฿${((product.price + selectedToppings.entries.fold<double>(0, (sum, entry) => sum + (entry.key.price * entry.value))) * quantity).toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -771,29 +810,95 @@ class _OrderScreenState extends State<_OrderScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Top buttons with categories
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildTopButton('ทั้งหมด', _selectedCategory == null, () {
-                  setState(() => _selectedCategory = null);
-                }),
-                const SizedBox(width: 8),
-                ..._categories.map((category) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: _buildTopButton(
-                      category.name,
-                      _selectedCategory?.id == category.id,
-                      () {
-                        setState(() => _selectedCategory = category);
-                      },
+          // แถวบนสุดที่มีปุ่มหมวดหมู่และเวลา
+          Row(
+            children: [
+              // ปุ่มหมวดหมู่ด้านซ้าย
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildTopButton('ทั้งหมด', _selectedCategory == null, () {
+                        setState(() => _selectedCategory = null);
+                      }),
+                      const SizedBox(width: 8),
+                      ..._categories.map((category) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: _buildTopButton(
+                            category.name,
+                            _selectedCategory?.id == category.id,
+                            () {
+                              setState(() => _selectedCategory = category);
+                            },
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+              // แสดงวื่อผู้ใช้และปุ่มรีเฟรช
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      _userName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  );
-                }),
-              ],
-            ),
+                    const SizedBox(width: 8),
+                    // ปุ่มรีเฟรช
+                    Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF323232),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+                        onPressed: _refreshApp,
+                        padding: const EdgeInsets.all(4),
+                        constraints: const BoxConstraints(),
+                        tooltip: 'รีเฟรชข้อมูล',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // แสดงวันที่และเวลาด้านขวา
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF323232),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.access_time, size: 20, color: Colors.white),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${_currentTime.day}/${_currentTime.month}/${_currentTime.year} ${_currentTime.hour.toString().padLeft(2, '0')}:${_currentTime.minute.toString().padLeft(2, '0')}:${_currentTime.second.toString().padLeft(2, '0')}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           // Grid of menu items
@@ -921,7 +1026,7 @@ class _OrderScreenState extends State<_OrderScreen> {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Text(
-                                    'ยอดรวม',
+                                    'ยอดร���ม',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,

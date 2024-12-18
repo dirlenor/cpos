@@ -218,6 +218,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
           .select()
           .single();
 
+      // อัพเดทข้อมูลยอดขาย
+      await _supabaseService.updateSalesAfterPayment(
+        widget.totalAmount,
+        method,
+      );
+
       if (mounted) {
         // แสดง SnackBar แจ้งสำเร็จ
         ScaffoldMessenger.of(context).showSnackBar(
@@ -396,7 +402,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // ปุ่ม��งินสด
+                      // ปุ่มชำระเงินสด
                       ElevatedButton(
                         onPressed: () => _showCashPaymentDialog(),
                         style: ElevatedButton.styleFrom(
